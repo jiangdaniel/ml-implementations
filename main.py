@@ -19,7 +19,7 @@ class SparseLayer(nn.Module):
         self.standard = normal.Normal(th.tensor([0.]), th.tensor([1.]))
 
         # Hyperparameters
-        self.n_gaussians = n_gaussians
+        self.n_gauss = n_gaussians
         self.n_local = n_local
         self.n_global = n_global
         self.tau = 0.1
@@ -33,44 +33,43 @@ class SparseLayer(nn.Module):
         self.sigma = nn.Parameter(th.zeros(n_gaussians))
         self.v = nn.Parameter(th.zeros(n_gaussians))
 
-        self.reset_parameters()
+        self._reset_parameters()
 
-    def reset_parameters(self):
+    def _reset_parameters(self):
         for w in self.parameters():
             w.data.uniform_(0, 1)
 
     def forward(self, x):
-        indices, values = self.sample_weight()
-        out = self.mm(x, indices.long(), values, self.shape.long())
+        indices, values = self._sample_weight()
+        out = self._sparse_mm(x, indices, values)
         return out
 
-    @staticmethod
-    def mm(input, indices, values, shape):
-        output = th.zeros(input.shape[0], shape[1])
+    def _sparse_mm(self, x, indices, values):
+        """Multiply sparse weights and dense input to get a dense output"""
+        output = th.zeros(x.shape[0], self.output_size)
         for (r, c), val in zip(indices, values):
-            output[:, c] += val * input[:, r]
+            output[:, c] += val * x[:, r]
         return output
 
-
-    def sample_weight(self):
+    def _sample_weight(self):
         D = self.D.sigmoid() * self.shape
         sigma = F.softplus(self.sigma + self.sigma_boost).unsqueeze(-1).repeat(1, 2) * self.shape * 0.1 + self.tau
 
         with th.no_grad():
-            D_prime = th.zeros(self.n_gaussians * (4 + self.n_local + self.n_global), 2)
+            D_prime = th.zeros(self.n_gauss * (4 + self.n_local + self.n_global), 2)
 
-            select_nearest = th.tensor([[1., 1.], [0., 1.], [1., 0.], [1., 1.]]).repeat(self.n_gaussians, 1)
-            select_local = (th.rand(self.n_local * self.n_gaussians, 2) - 0.5) * self.local_shape
-            D_prime[:4 * self.n_gaussians] = D.repeat(1, 4).view(-1, 2) + select_nearest
-            D_prime[4 * self.n_gaussians:(4 + self.n_local) * self.n_gaussians] = D.repeat(1, self.n_local).view(-1, 2) + select_local
-            D_prime[(4 + self.n_local) * self.n_gaussians:(4 + self.n_local + self.n_global) * self.n_gaussians] = th.rand(self.n_global * self.n_gaussians, 2) * self.shape
+            select_nearest = th.tensor([[1., 1.], [0., 1.], [1., 0.], [1., 1.]]).repeat(self.n_gauss, 1)
+            select_local = (th.rand(self.n_local * self.n_gauss, 2) - 0.5) * self.local_shape
+            D_prime[:4 * self.n_gauss] = D.repeat(1, 4).view(-1, 2) + select_nearest
+            D_prime[4 * self.n_gauss:(4 + self.n_local) * self.n_gauss] = D.repeat(1, self.n_local).view(-1, 2) + select_local
+            D_prime[(4 + self.n_local) * self.n_gauss:(4 + self.n_local + self.n_global) * self.n_gauss] = th.rand(self.n_global * self.n_gauss, 2) * self.shape
 
             D_prime.round_()
             D_prime[:, 0].clamp_(0, self.shape[0]-1)
             D_prime[:, 1].clamp_(0, self.shape[1]-1)
 
-        means = D.t().unsqueeze(0).repeat(self.n_gaussians * (4 + self.n_local + self.n_global), 1, 1)
-        stds = sigma.sqrt().t().unsqueeze(0).repeat(self.n_gaussians * (4 + self.n_local + self.n_global), 1, 1)
+        means = D.t().unsqueeze(0).repeat(self.n_gauss * (4 + self.n_local + self.n_global), 1, 1)
+        stds = sigma.sqrt().t().unsqueeze(0).repeat(self.n_gauss * (4 + self.n_local + self.n_global), 1, 1)
         z = (D_prime.unsqueeze(-1).repeat(1, 1, 3) - means) / stds
 
         probs = self.standard.log_prob(z).sum(1).exp()
@@ -83,7 +82,7 @@ class SparseLayer(nn.Module):
         probs = probs * (1-mask).unsqueeze(-1).float()
         probs_intermediate = probs / probs.sum(0, keepdim=True)
         v_prime = (probs_intermediate * self.v).sum(1)
-        return D_prime, v_prime
+        return D_prime.long(), v_prime
 
 
 def identity(args):
@@ -144,14 +143,21 @@ def main(args):
     probs = probs * (1-mask).unsqueeze(-1).float()
     probs_intermediate = probs / probs.sum(0, keepdim=True)
     v_prime = (probs_intermediate * v).sum(1)
-    out = SparseLayer.mm(x, D_prime.long(), v_prime, th.Size([100, 10]))
+    out = mm(x, D_prime.long(), v_prime, th.Size([100, 10]))
     loss = out.sum()
     loss.backward()
 
 
+def mm(input, indices, values, shape):
+    output = th.zeros(input.shape[0], shape[1])
+    for (r, c), val in zip(indices, values):
+        output[:, c] += val * input[:, r]
+    return output
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=2)
 
