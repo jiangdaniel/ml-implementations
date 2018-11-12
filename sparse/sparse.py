@@ -25,7 +25,7 @@ class SparseLayer(nn.Module):
         self.tau = 0.1
         self.sigma_boost = 2.
         if local1 is None:
-            local1 = local2 = np.log(input_size)
+            local1 = local2 = np.log2(input_size)
         self.local_shape = th.Tensor([local1, local2])
 
         # Parameters
@@ -83,20 +83,6 @@ class SparseLayer(nn.Module):
         probs_intermediate = probs / probs.sum(0, keepdim=True)
         v_prime = (probs_intermediate * self.v).sum(1)
         return D_prime.long(), v_prime
-
-
-def identity(args):
-    layer = SparseLayer(10, 10, args.k, args.local, args.glob)
-    optimizer = optim.Adam(layer.parameters(), args.lr)
-    criterion = nn.MSELoss()
-    for epoch in range(args.epochs):
-        x = th.randn(args.batch_size, 10)
-        pred = layer(x)
-        loss = criterion(pred, x)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        print(loss.item())
 
 
 def main(args):
@@ -166,4 +152,4 @@ if __name__ == "__main__":
     parser.add_argument("--glob", type=int, default=2)
     parser.add_argument("--tau", type=float, default=0.1)
     args = parser.parse_args()
-    identity(args)
+    main(args)
