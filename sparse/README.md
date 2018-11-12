@@ -8,3 +8,4 @@ PyTorch implementation of Learning sparse transformations through backpropagatio
 - [ ] Visualize weight matrix samples
 - [ ] Sample different weight matrix for each data point?
 - [ ] Figure out values for number of gaussians
+- [ ] Figure out size of local sampling regions
