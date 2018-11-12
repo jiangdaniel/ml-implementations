@@ -70,7 +70,7 @@ class SparseLayer(nn.Module):
 
         means = D.t().unsqueeze(0).repeat(self.n_gauss * (4 + self.n_local + self.n_global), 1, 1)
         stds = sigma.sqrt().t().unsqueeze(0).repeat(self.n_gauss * (4 + self.n_local + self.n_global), 1, 1)
-        z = (D_prime.unsqueeze(-1).repeat(1, 1, 3) - means) / stds
+        z = (D_prime.unsqueeze(-1).repeat(1, 1, self.n_gauss) - means) / stds
 
         probs = self.standard.log_prob(z).sum(1).exp()
 

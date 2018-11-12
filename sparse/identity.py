@@ -22,7 +22,7 @@ def identity(args):
     writer = SummaryWriter("./out")
 
     for n, (a_local, a_global) in zip(ns, a):
-        layer = SparseLayer(n, n, args.k, a_local, a_global)
+        layer = SparseLayer(n, n, n, a_local, a_global)
         optimizer = optim.Adam(layer.parameters(), args.lr)
         val = th.randn(args.batch_size, n)
 
@@ -36,19 +36,18 @@ def identity(args):
             optimizer.step()
             running_loss += loss.item()
             if epoch % args.log_iter == args.log_iter - 1:
-                writer.add_scalar(f"train/{n}", running_loss / args.log_iter, epoch)
-                writer.add_scalar(f"val/{n}", F.mse_loss(layer(val), val), epoch)
+                writer.add_scalar(f"train/{n}dims", running_loss / args.log_iter, epoch)
+                writer.add_scalar(f"val/{n}dims", F.mse_loss(layer(val), val), epoch)
                 running_loss = 0.
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr", type=float, default=0.005)
-    parser.add_argument("--epochs", type=int, default=1000)
+    parser.add_argument("--epochs", type=int, default=10000)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--log-iter", type=int, default=20)
 
-    parser.add_argument("--k", type=int, default=3)
     parser.add_argument("--local", type=int, default=2)
     parser.add_argument("--glob", type=int, default=2)
     parser.add_argument("--tau", type=float, default=0.1)
