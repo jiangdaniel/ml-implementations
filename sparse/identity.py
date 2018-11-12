@@ -4,6 +4,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
 import argparse
 
 import numpy as np
@@ -13,13 +14,14 @@ import torch.optim as optim
 import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
-from sparse import SparseLayer
+import utils
+from sparse_layer import SparseLayer
 
 
 def identity(args):
     ns = [8, 16, 32, 64]
     a = [(1, 2), (2, 2), (2, 8), (2, 10)]
-    writer = SummaryWriter("./out")
+    writer = SummaryWriter(os.path.join("./out", utils.timestamp()))
 
     for n, (a_local, a_global) in zip(ns, a):
         layer = SparseLayer(n, n, n, a_local, a_global)
