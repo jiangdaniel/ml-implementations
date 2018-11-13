@@ -62,7 +62,7 @@ class SparseLayer(nn.Module):
         with th.no_grad():
             D_prime = th.zeros(self.n_gauss * (4 + self.n_local + self.n_global), 2)
 
-            select_nearest = th.tensor([[1., 1.], [0., 1.], [1., 0.], [1., 1.]]).repeat(self.n_gauss, 1)
+            select_nearest = th.tensor([[0., 0.], [0., 1.], [1., 0.], [1., 1.]]).repeat(self.n_gauss, 1)
             select_local = (th.rand(self.n_local * self.n_gauss, 2) - 0.5) * self.local_shape
             D_prime[:4 * self.n_gauss] = D.repeat(1, 4).view(-1, 2) + select_nearest
             D_prime[4 * self.n_gauss:(4 + self.n_local) * self.n_gauss] = D.repeat(1, self.n_local).view(-1, 2) + select_local
@@ -76,7 +76,7 @@ class SparseLayer(nn.Module):
         stds = sigma.sqrt().t().unsqueeze(0).repeat(self.n_gauss * (4 + self.n_local + self.n_global), 1, 1)
         z = (D_prime.unsqueeze(-1).repeat(1, 1, self.n_gauss) - means) / stds
 
-        probs = self.standard.log_prob(z).sum(1).exp()
+        probs = (self.standard.log_prob(z) - stds.log()).sum(1).exp()
 
         # Remove duplicates using Cantor technique described in paper
         with th.no_grad():
