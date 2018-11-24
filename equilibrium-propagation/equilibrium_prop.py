@@ -18,11 +18,11 @@ def main(args):
 
     a = np.sqrt(2.0 / (784 + 500))
     W1 = np.random.uniform(-a, a, (784, 500))
-    b1 = np.random.uniform(-a/2, a/2, 500)
+    b1 = np.random.uniform(-a, a, 500)
 
     a = np.sqrt(2.0 / (500 + 10))
     W2 = np.random.uniform(-a, a, (500, 10))
-    b2 = np.random.uniform(-a/2, a/2, 10)
+    b2 = np.random.uniform(-a, a, 10)
 
     running_loss = 0.
     running_energy = 0.
@@ -36,6 +36,7 @@ def main(args):
     for epoch in range(args.epochs):
         for i, (x, labels) in enumerate(tqdm(trainloader)):
             x, labels = x.view(-1, 784).numpy(), labels.numpy()  # TODO: standardize?
+            #x = x * 2. - 1.
             h, y = states[i]
 
             # Free phase
@@ -45,6 +46,11 @@ def main(args):
 
                 h = rho(h + epsilon * dh)
                 y = rho(y + epsilon * dy)
+                energy = np.square(h).sum() / 2 + np.square(y).sum() / 2 \
+                    - ((W1 * (x.T @ h)) / 2).sum() - ((W2 * (h.T @ y)) / 2).sum() \
+                    - (h @ b1).sum() - (y @ b2).sum()
+                #print(np.round(energy, 4), np.round(np.linalg.norm(dh), 4))
+            #import ipdb; ipdb.set_trace()
 
             h_free, y_free = np.copy(h), np.copy(y)
             states[i] = h_free, y_free
@@ -54,23 +60,30 @@ def main(args):
 
             # Weakly clamped
             for j in range(4):
-                dy = d_rho(y) * (h @ W2 + b2) - y + beta * (t - y)
                 dh = d_rho(h) * (x @ W1 + y @ W2.T + b1) - h
+                dy = d_rho(y) * (h @ W2 + b2) - y + beta * (t - y)
 
                 h = rho(h + epsilon * dh)
                 y = rho(y + epsilon * dy)
+                energy = np.square(h).sum() / 2 + np.square(y).sum() / 2 \
+                    - (W1 * (x.T @ h)).sum() / 2 - (W2 * (h.T @ y)).sum() / 2 \
+                    - (h @ b1).sum() - (y @ b2).sum() + beta * np.square(y - t).sum() / 2
+                #print(np.round(energy, 4), np.round(np.linalg.norm(dh), 4))
+            #import ipdb; ipdb.set_trace()
 
             h_clamped = np.copy(h)
             y_clamped = np.copy(y)
 
-            W1 += alpha1 * (1/beta) * (rho(x.T) @ rho(h_clamped) - rho(x.T) @ rho(h_free))
-            W2 += alpha2 * (1/beta) * (rho(h_clamped.T) @ rho(y_clamped) - rho(h_free.T) @ rho(y_free))
+            W1 += alpha1 / beta * (rho(x.T) @ rho(h_clamped) - rho(x.T) @ rho(h_free)) / args.batch_size
+            W2 += alpha2 / beta * (rho(h_clamped.T) @ rho(y_clamped) - rho(h_free.T) @ rho(y_free)) / args.batch_size
+            b1 += alpha1 / beta * (rho(h_clamped) - rho(h_free)).mean(0)
+            b2 += alpha2 / beta * (rho(y_clamped) - rho(y_free)).mean(0)
 
-            running_energy += np.square(h_free).sum() / 2 + np.square(y_free).sum() \
-                - ((W1 * (x.T @ h)) / 2).sum() - ((W2 * (h.T @ y)) / 2).sum() \
-                - (h @ b1).sum() - (y @ b2).sum()
+            running_energy += np.square(h_free).sum() / 2 + np.square(y_free).sum() / 2 \
+                - ((W1 * (x.T @ h_free)) / 2).sum() - ((W2 * (h_free.T @ y_free)) / 2).sum() \
+                - (h_free @ b1).sum() - (y_free @ b2).sum()
             running_loss += np.square(t - y_free).sum()
-            running_true_positive += (np.argmax(y_free) == labels).sum()
+            running_true_positive += np.count_nonzero(np.argmax(y_free, 1) == labels)
             if i % args.log_iter == args.log_iter - 1:
                 print(f"Energy: {running_energy / args.batch_size / args.log_iter}, Accuracy: {running_true_positive / args.batch_size / args.log_iter}, Loss: {running_loss / args.log_iter}")
                 running_loss = 0.
