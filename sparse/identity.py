@@ -38,12 +38,13 @@ def identity(args):
             optimizer.step()
             running_loss += loss.item()
             if epoch % args.log_iter == args.log_iter - 1:
-                writer.add_scalar(f"train/{n}dims", running_loss / args.log_iter, epoch)
-                writer.add_scalar(f"val/{n}dims", F.mse_loss(layer(val), val), epoch)
-                running_loss = 0.
-                means = (layer.D.sigmoid() * layer.shape).detach().cpu().numpy()
-                sigmas = (F.softplus(layer.sigma + layer.sigma_boost) * n * 0.1 + layer.tau).detach().cpu().numpy()
-                plot(means, sigmas, n)
+                with th.no_grad():
+                    writer.add_scalar(f"train/{n}dims", running_loss / args.log_iter, epoch)
+                    writer.add_scalar(f"val/{n}dims", F.mse_loss(layer(val), val), epoch)
+                    running_loss = 0.
+                    means = (layer.D.sigmoid() * layer.shape).detach().cpu().numpy()
+                    sigmas = (F.softplus(layer.sigma + layer.sigma_boost) * n * 0.1 + layer.tau).detach().cpu().numpy()
+                    plot(means, sigmas, n)
 
 
 def plot(means, sigmas, n):

@@ -29,7 +29,7 @@ class SparseLayer(nn.Module):
         self.tau = 0.1
         self.sigma_boost = 2.
         if local1 is None:
-            local1 = local2 = np.log2(input_size)
+            local1 = local2 = 4.
         self.local_shape = th.Tensor([local1, local2])
 
         # Parameters
