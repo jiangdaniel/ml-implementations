@@ -33,15 +33,9 @@ class SparseLayer(nn.Module):
         self.local_shape = th.Tensor([local1, local2])
 
         # Parameters
-        self.D = nn.Parameter(th.zeros(n_gaussians, 2))
-        self.sigma = nn.Parameter(th.zeros(n_gaussians))
-        self.v = nn.Parameter(th.zeros(n_gaussians))
-
-        self._reset_parameters()
-
-    def _reset_parameters(self):
-        for w in self.parameters():
-            w.data.uniform_(0, 1)
+        self.D = nn.Parameter(th.randn(n_gaussians, 2))
+        self.sigma = nn.Parameter(th.randn(n_gaussians))
+        self.v = nn.Parameter(th.randn(n_gaussians))
 
     def forward(self, x):
         indices, values = self._sample_weight()

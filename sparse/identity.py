@@ -21,7 +21,7 @@ from sparse_layer import SparseLayer
 def identity(args):
     ns = [8, 16, 32, 64]
     a = [(1, 2), (2, 2), (2, 8), (2, 10)]
-    writer = SummaryWriter(os.path.join("./out", utils.timestamp()))
+    writer = SummaryWriter(os.path.join("./out", args.dir))
 
     for n, (a_local, a_global) in zip(ns, a):
         layer = SparseLayer(n, n, n, a_local, a_global)
@@ -41,6 +41,16 @@ def identity(args):
                 writer.add_scalar(f"train/{n}dims", running_loss / args.log_iter, epoch)
                 writer.add_scalar(f"val/{n}dims", F.mse_loss(layer(val), val), epoch)
                 running_loss = 0.
+                means = (layer.D.sigmoid() * layer.shape).detach().cpu().numpy()
+                sigmas = (F.softplus(layer.sigma + layer.sigma_boost) * n * 0.1 + layer.tau).detach().cpu().numpy()
+                plot(means, sigmas, n)
+
+
+def plot(means, sigmas, n):
+    viz = np.zeros((n, n))
+    indices = np.clip(np.round(means), 0, n-1).astype(int)
+    viz[indices[:, 0], indices[:, 1]] = 1
+    print(np.round(viz, 1))
 
 
 if __name__ == "__main__":
@@ -49,6 +59,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10000)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--log-iter", type=int, default=20)
+    parser.add_argument("--dir", default=utils.timestamp())
 
     parser.add_argument("--local", type=int, default=2)
     parser.add_argument("--glob", type=int, default=2)
