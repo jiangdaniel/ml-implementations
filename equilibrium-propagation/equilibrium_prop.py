@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import argparse
 
 import numpy as np
 import torch as th
 import torchvision
 from tqdm import tqdm
-import ipdb
 
 
 def main(args):
-    trainloader = get_trainloader(args.batch_size)
+    trainloader, testloader = get_loaders(args.batch_size, args.fashion)
     epsilon = 0.5
     beta = 1.0
     alpha1 = 0.1
@@ -24,19 +27,13 @@ def main(args):
     W2 = np.random.uniform(-a, a, (500, 10))
     b2 = np.random.uniform(-a, a, 10)
 
-    running_loss = 0.
-    running_energy = 0.
-    running_true_positive = 0.
-    states = []
-    for _ in range(len(trainloader)):
-        h = np.random.uniform(0, 1., (args.batch_size, 500))
-        y = np.random.uniform(0, 1., (args.batch_size, 10))
-        states.append((h, y))
+    states = [(np.random.uniform(0, 1., (args.batch_size, 500)), \
+            np.random.uniform(0, 1., (args.batch_size, 10))) for _ in range(len(trainloader))]
 
     for epoch in range(args.epochs):
-        for i, (x, labels) in enumerate(tqdm(trainloader)):
-            x, labels = x.view(-1, 784).numpy(), labels.numpy()  # TODO: standardize?
-            #x = x * 2. - 1.
+        running_loss = running_energy = running_true_positive = 0.
+        for i, (x, labels) in enumerate(tqdm(trainloader, desc=f"Epoch {epoch}")):
+            x, labels = x.view(-1, 784).numpy(), labels.numpy()
             h, y = states[i]
 
             # Free phase
@@ -46,11 +43,12 @@ def main(args):
 
                 h = rho(h + epsilon * dh)
                 y = rho(y + epsilon * dy)
-                energy = np.square(h).sum() / 2 + np.square(y).sum() / 2 \
-                    - ((W1 * (x.T @ h)) / 2).sum() - ((W2 * (h.T @ y)) / 2).sum() \
-                    - (h @ b1).sum() - (y @ b2).sum()
-                #print(np.round(energy, 4), np.round(np.linalg.norm(dh), 4))
-            #import ipdb; ipdb.set_trace()
+                '''
+                energy = (np.square(h).sum() + np.square(y).sum() \
+                    - (W1 * (x.T @ h)).sum() - (W2 * (h.T @ y)).sum()) / 2 \
+                    - (h @ b1).sum() - (y @ b2).sum())
+                print(np.round(energy, 4), np.round(np.linalg.norm(dh), 4))
+                '''
 
             h_free, y_free = np.copy(h), np.copy(y)
             states[i] = h_free, y_free
@@ -58,18 +56,19 @@ def main(args):
             t = np.zeros((x.shape[0], 10))
             t[np.arange(t.shape[0]), labels] = 1
 
-            # Weakly clamped
+            # Weakly clamped phase
             for j in range(4):
                 dh = d_rho(h) * (x @ W1 + y @ W2.T + b1) - h
                 dy = d_rho(y) * (h @ W2 + b2) - y + beta * (t - y)
 
                 h = rho(h + epsilon * dh)
                 y = rho(y + epsilon * dy)
-                energy = np.square(h).sum() / 2 + np.square(y).sum() / 2 \
-                    - (W1 * (x.T @ h)).sum() / 2 - (W2 * (h.T @ y)).sum() / 2 \
-                    - (h @ b1).sum() - (y @ b2).sum() + beta * np.square(y - t).sum() / 2
-                #print(np.round(energy, 4), np.round(np.linalg.norm(dh), 4))
-            #import ipdb; ipdb.set_trace()
+                '''
+                energy = (np.square(h).sum() + np.square(y).sum() \
+                    - (W1 * (x.T @ h)).sum() - (W2 * (h.T @ y)).sum()) / 2 \
+                    - (h @ b1).sum() - (y @ b2).sum()
+                print(np.round(energy, 4), np.round(np.linalg.norm(dh), 4))
+                '''
 
             h_clamped = np.copy(h)
             y_clamped = np.copy(y)
@@ -79,45 +78,49 @@ def main(args):
             b1 += alpha1 / beta * (rho(h_clamped) - rho(h_free)).mean(0)
             b2 += alpha2 / beta * (rho(y_clamped) - rho(y_free)).mean(0)
 
-            running_energy += np.square(h_free).sum() / 2 + np.square(y_free).sum() / 2 \
-                - ((W1 * (x.T @ h_free)) / 2).sum() - ((W2 * (h_free.T @ y_free)) / 2).sum() \
+            running_energy += (np.square(h_free).sum() + np.square(y_free).sum() \
+                - (W1 * (x.T @ h_free)).sum() - (W2 * (h_free.T @ y_free)).sum()) / 2 \
                 - (h_free @ b1).sum() - (y_free @ b2).sum()
             running_loss += np.square(t - y_free).sum()
             running_true_positive += np.count_nonzero(np.argmax(y_free, 1) == labels)
-            if i % args.log_iter == args.log_iter - 1:
-                print(f"Energy: {running_energy / args.batch_size / args.log_iter}, Accuracy: {running_true_positive / args.batch_size / args.log_iter}, Loss: {running_loss / args.log_iter}")
-                running_loss = 0.
-                running_energy = 0.
-                running_true_positive = 0.
+
+        energy_avg = running_energy / (len(trainloader) * args.batch_size)
+        accuracy_avg = running_true_positive / (len(trainloader) * args.batch_size)
+        loss_avg = running_loss / (len(trainloader) * args.batch_size)
+        print(f"Energy: {energy_avg}, Accuracy: {accuracy_avg}, Loss: {loss_avg}")
 
 def rho(x):
     return np.copy(np.clip(x, 0., 1.))
 
 def d_rho(x):
-    # greater than or equal to?
     return (x >= 0.) * (x <= 1.)
 
+def get_loaders(batch_size, fashion=False):
+    mnist = torchvision.datasets.MNIST
+    if fashion:
+        mnist = torchvision.datasets.FashionMNIST
 
-def get_trainloader(batch_size):
     transform = torchvision.transforms.Compose(
         [torchvision.transforms.ToTensor(),])
-    traindataset = torchvision.datasets.MNIST(
-        root="./data",
-        train=True,
-        download=True,
-        transform=transform)
+
     trainloader = th.utils.data.DataLoader(
-        traindataset,
+        mnist(root="./data", train=True, download=True, transform=transform),
         batch_size=batch_size,
         shuffle=True,
         num_workers=2)
-    return trainloader
+    testloader = th.utils.data.DataLoader(
+        mnist(root="./data", train=False, download=True, transform=transform),
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=2)
+    return trainloader, testloader
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=1000)
-    parser.add_argument("--log-iter", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=20)
+
+    parser.add_argument("--fashion", action="store_true", default=False)
     args = parser.parse_args()
     main(args)
