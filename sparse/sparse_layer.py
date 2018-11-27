@@ -46,6 +46,12 @@ class SparseLayer(nn.Module):
         out = self._sparse_mm(x, indices, values)
         return out
 
+    def hyper(self):
+        """Evaluate hypernetwork."""
+        D = self.D.sigmoid() * (self.shape - 1)
+        sigma = (F.softplus(self.sigma + SIGMA_BOOST) + EPSILON).unsqueeze(-1).repeat(1, 2) * self.shape * 0.1 + self.tau
+        return D, sigma, self.v
+
     def _sparse_mm(self, x, indices, values):
         """Multiply sparse weights and dense input to get a dense output"""
         output = th.zeros(x.shape[0], self.output_size)
@@ -54,8 +60,7 @@ class SparseLayer(nn.Module):
         return output
 
     def _sample_weight(self):
-        D = self.D.sigmoid() * (self.shape - 1)
-        sigma = (F.softplus(self.sigma + SIGMA_BOOST) + EPSILON).unsqueeze(-1).repeat(1, 2) * self.shape * 0.1 + self.tau
+        D, sigma, values = self.hyper()
 
         with th.no_grad():
             D_prime = th.zeros(self.n_gauss * (4 + self.n_local + self.n_global), 2)
@@ -83,5 +88,5 @@ class SparseLayer(nn.Module):
             mask = th.cat((th.zeros(1, dtype=th.uint8), cantor_sort[1:] == cantor_sort[:-1]))[cantor_indices]
         probs = probs * (1-mask).unsqueeze(-1).float()
         probs_intermediate = probs / probs.sum(0, keepdim=True)
-        v_prime = (probs_intermediate * self.v).sum(1)
+        v_prime = (probs_intermediate * values).sum(1)
         return D_prime.long(), v_prime

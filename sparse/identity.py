@@ -43,13 +43,13 @@ def identity(args):
                 cov[i, i+1] = 0.5
                 cov[i+1, i] = 0.5
         normal = MultivariateNormal(th.zeros(n), cov)
-        layer = SparseLayer(n, n, n, a_local, a_global, fix_values=True)
+        layer = SparseLayer(n, n, n, a_local, a_global, fix_values=True).to(device)
         optimizer = optim.Adam(layer.parameters(), args.lr)
-        val = normal.sample(th.Size([args.batch_size]))
+        val = normal.sample(th.Size([args.batch_size])).to(device)
 
         running_loss = 0.
         for epoch in range(args.epochs):
-            x = th.randn(args.batch_size, n)
+            x = th.randn(args.batch_size, n, device=device)
             pred = layer(x)
             loss = F.mse_loss(pred, x)
             optimizer.zero_grad()
@@ -59,11 +59,10 @@ def identity(args):
             if epoch % args.log_iter == args.log_iter - 1:
                 with th.no_grad():
                     writer.add_scalar(f"train/{n}dims", running_loss / args.log_iter, epoch)
-                    writer.add_scalar(f"val/{n}dims", F.mse_loss(layer(val), val), epoch)
+                    writer.add_scalar(f"val/{n}dims", F.mse_loss(layer(val), val).item(), epoch)
                     running_loss = 0.
-                    means = (layer.D.sigmoid() * (layer.shape - 1)).unsqueeze(0)
-                    sigmas = ((F.softplus(layer.sigma + SIGMA_BOOST) + EPSILON) * n * 0.1 + layer.tau).unsqueeze(0).unsqueeze(2).repeat((1, 1, 2))
-                    values = layer.v.unsqueeze(0)
+                    means, sigmas, values = layer.hyper()
+                    means, sigmas, values = means.unsqueeze(0), sigmas.unsqueeze(0), values.unsqueeze(0)
 
                     plt.figure(figsize=(7, 7))
                     plt.cla()
@@ -87,5 +86,7 @@ if __name__ == "__main__":
     parser.add_argument("--local", type=int, default=4)
     parser.add_argument("--glob", type=int, default=4)
     parser.add_argument("--tau", type=float, default=0.1)
+    parser.add_argument("--no-cuda", action="store_true", default=False)
+    device = th.device("cpu" if (not th.cuda.is_available() or args.no_cuda) else "cuda")
     args = parser.parse_args()
     identity(args)
