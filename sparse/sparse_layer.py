@@ -14,8 +14,12 @@ import torch.nn.functional as F
 from torch.distributions import normal
 
 
+EPSILON = 10e-7
+SIGMA_BOOST = 2.0
+
+
 class SparseLayer(nn.Module):
-    def __init__(self, input_size, output_size, n_gaussians, n_local, n_global, local1=None, local2=None):
+    def __init__(self, input_size, output_size, n_gaussians, n_local, n_global, fix_values=False, local1=None, local2=None):
         super(SparseLayer, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
@@ -27,7 +31,6 @@ class SparseLayer(nn.Module):
         self.n_local = n_local
         self.n_global = n_global
         self.tau = 0.1
-        self.sigma_boost = 2.
         if local1 is None:
             local1 = local2 = 4.
         self.local_shape = th.Tensor([local1, local2])
@@ -35,7 +38,10 @@ class SparseLayer(nn.Module):
         # Parameters
         self.D = nn.Parameter(th.randn(n_gaussians, 2))
         self.sigma = nn.Parameter(th.randn(n_gaussians))
-        self.v = nn.Parameter(th.randn(n_gaussians))
+        if fix_values:
+            self.v = th.ones(n_gaussians)
+        else:
+            self.v = nn.Parameter(th.randn(n_gaussians))
 
     def forward(self, x):
         indices, values = self._sample_weight()
@@ -50,8 +56,8 @@ class SparseLayer(nn.Module):
         return output
 
     def _sample_weight(self):
-        D = self.D.sigmoid() * self.shape
-        sigma = F.softplus(self.sigma + self.sigma_boost).unsqueeze(-1).repeat(1, 2) * self.shape * 0.1 + self.tau
+        D = self.D.sigmoid() * (self.shape - 1)
+        sigma = (F.softplus(self.sigma + SIGMA_BOOST) + EPSILON).unsqueeze(-1).repeat(1, 2) * self.shape * 0.1 + self.tau
 
         with th.no_grad():
             D_prime = th.zeros(self.n_gauss * (4 + self.n_local + self.n_global), 2)

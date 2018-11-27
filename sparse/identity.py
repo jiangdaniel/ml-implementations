@@ -19,7 +19,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 import utils
-from sparse_layer import SparseLayer
+from sparse_layer import (
+    SparseLayer,
+    SIGMA_BOOST,
+    EPSILON)
 
 
 MARGIN = 0.1
@@ -31,8 +34,8 @@ def identity(args):
     writer = SummaryWriter(os.path.join("./out", args.dir))
 
     for n, (a_local, a_global) in zip(ns, a):
-        if not os.path.exists("./images/{}/".format(args.dir):
-            os.makedirs("./images/{}/".format(args.dir))
+        if not os.path.exists(f"./images/{args.dir}/{n}"):
+            os.makedirs(f"./images/{args.dir}/{n}")
 
         cov = th.eye(n)
         if args.correlated:
@@ -40,7 +43,7 @@ def identity(args):
                 cov[i, i+1] = 0.5
                 cov[i+1, i] = 0.5
         normal = MultivariateNormal(th.zeros(n), cov)
-        layer = SparseLayer(n, n, n, a_local, a_global)
+        layer = SparseLayer(n, n, n, a_local, a_global, fix_values=True)
         optimizer = optim.Adam(layer.parameters(), args.lr)
         val = normal.sample(th.Size([args.batch_size]))
 
@@ -58,8 +61,8 @@ def identity(args):
                     writer.add_scalar(f"train/{n}dims", running_loss / args.log_iter, epoch)
                     writer.add_scalar(f"val/{n}dims", F.mse_loss(layer(val), val), epoch)
                     running_loss = 0.
-                    means = (layer.D.sigmoid() * layer.shape).unsqueeze(0)
-                    sigmas = (F.softplus(layer.sigma + layer.sigma_boost) * n * 0.1 + layer.tau).unsqueeze(0).unsqueeze(2).repeat((1, 1, 2))
+                    means = (layer.D.sigmoid() * (layer.shape - 1)).unsqueeze(0)
+                    sigmas = ((F.softplus(layer.sigma + SIGMA_BOOST) + EPSILON) * n * 0.1 + layer.tau).unsqueeze(0).unsqueeze(2).repeat((1, 1, 2))
                     values = layer.v.unsqueeze(0)
 
                     plt.figure(figsize=(7, 7))
@@ -68,7 +71,7 @@ def identity(args):
                     plt.xlim((-MARGIN*(n-1), (n-1) * (1.0+MARGIN)))
                     plt.ylim((-MARGIN*(n-1), (n-1) * (1.0+MARGIN)))
 
-                    plt.savefig("./images/{}/means{:06}.pdf".format(args.dir, epoch))
+                    plt.savefig("./images/{}/{}/means{:06}.pdf".format(args.dir, n, epoch))
                     plt.close()
 
 
@@ -77,12 +80,12 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.005)
     parser.add_argument("--epochs", type=int, default=10000)
     parser.add_argument("--batch_size", type=int, default=64)
-    parser.add_argument("--log-iter", type=int, default=100)
+    parser.add_argument("--log-iter", type=int, default=1000)
     parser.add_argument("--dir", default=utils.timestamp())
     parser.add_argument("--correlated", action="store_true", default=False)
 
-    parser.add_argument("--local", type=int, default=2)
-    parser.add_argument("--glob", type=int, default=2)
+    parser.add_argument("--local", type=int, default=4)
+    parser.add_argument("--glob", type=int, default=4)
     parser.add_argument("--tau", type=float, default=0.1)
     args = parser.parse_args()
     identity(args)
