@@ -17,6 +17,7 @@ from tensorboardX import SummaryWriter
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 import utils
 from sparse_layer import (
@@ -48,7 +49,7 @@ def identity(args):
         val = normal.sample(th.Size([args.batch_size])).to(device)
 
         running_loss = 0.
-        for epoch in range(args.epochs):
+        for epoch in tqdm(range(args.epochs)):
             x = th.randn(args.batch_size, n, device=device)
             pred = layer(x)
             loss = F.mse_loss(pred, x)
@@ -87,6 +88,6 @@ if __name__ == "__main__":
     parser.add_argument("--glob", type=int, default=4)
     parser.add_argument("--tau", type=float, default=0.1)
     parser.add_argument("--no-cuda", action="store_true", default=False)
-    device = th.device("cpu" if (not th.cuda.is_available() or args.no_cuda) else "cuda")
     args = parser.parse_args()
+    device = th.device("cpu" if (not th.cuda.is_available() or args.no_cuda) else "cuda")
     identity(args)

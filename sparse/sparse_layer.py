@@ -41,6 +41,14 @@ class SparseLayer(nn.Module):
         else:
             self.v = nn.Parameter(th.randn(n_gaussians))
 
+    def to(self, device):
+        super(SparseLayer, self).to(device)
+        self.shape = self.shape.to(device)
+        self.local_shape = self.local_shape.to(device)
+        self.v = self.v.to(device)
+        self.standard = normal.Normal(th.tensor([0.], device=device), th.tensor([1.], device=device))
+        return self
+
     def forward(self, x):
         indices, values = self._sample_weight()
         out = self._sparse_mm(x, indices, values)
@@ -54,7 +62,7 @@ class SparseLayer(nn.Module):
 
     def _sparse_mm(self, x, indices, values):
         """Multiply sparse weights and dense input to get a dense output"""
-        output = th.zeros(x.shape[0], self.output_size)
+        output = th.zeros(x.shape[0], self.output_size, device=x.device)
         for (r, c), val in zip(indices, values):
             output[:, c] += val * x[:, r]
         return output
@@ -63,13 +71,13 @@ class SparseLayer(nn.Module):
         D, sigma, values = self.hyper()
 
         with th.no_grad():
-            D_prime = th.zeros(self.n_gauss * (4 + self.n_local + self.n_global), 2)
+            D_prime = th.zeros(self.n_gauss * (4 + self.n_local + self.n_global), 2, device=D.device)
 
-            select_nearest = th.tensor([[0., 0.], [0., 1.], [1., 0.], [1., 1.]]).repeat(self.n_gauss, 1)
-            select_local = (th.rand(self.n_local * self.n_gauss, 2) - 0.5) * self.local_shape
+            select_nearest = th.tensor([[0., 0.], [0., 1.], [1., 0.], [1., 1.]], device=D.device).repeat(self.n_gauss, 1)
+            select_local = (th.rand(self.n_local * self.n_gauss, 2, device=D.device) - 0.5) * self.local_shape
             D_prime[:4 * self.n_gauss] = D.repeat(1, 4).view(-1, 2) + select_nearest
             D_prime[4 * self.n_gauss:(4 + self.n_local) * self.n_gauss] = D.repeat(1, self.n_local).view(-1, 2) + select_local
-            D_prime[(4 + self.n_local) * self.n_gauss:(4 + self.n_local + self.n_global) * self.n_gauss] = th.rand(self.n_global * self.n_gauss, 2) * self.shape
+            D_prime[(4 + self.n_local) * self.n_gauss:(4 + self.n_local + self.n_global) * self.n_gauss] = th.rand(self.n_global * self.n_gauss, 2, device=D.device) * self.shape
 
             D_prime.round_()
             D_prime[:, 0].clamp_(0, self.shape[0]-1)
@@ -85,7 +93,7 @@ class SparseLayer(nn.Module):
         with th.no_grad():
             cantor = D_prime.sum(1) * (D_prime.sum(1) + 1) / 2 + D_prime[:, 1]
             cantor_sort, cantor_indices = cantor.sort()
-            mask = th.cat((th.zeros(1, dtype=th.uint8), cantor_sort[1:] == cantor_sort[:-1]))[cantor_indices]
+            mask = th.cat((th.zeros(1, dtype=th.uint8, device=D.device), cantor_sort[1:] == cantor_sort[:-1]))[cantor_indices]
         probs = probs * (1-mask).unsqueeze(-1).float()
         probs_intermediate = probs / probs.sum(0, keepdim=True)
         v_prime = (probs_intermediate * values).sum(1)
