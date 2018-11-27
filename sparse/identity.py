@@ -31,7 +31,7 @@ MARGIN = 0.1
 def identity(args):
     ns = [8, 16, 32, 64]
     a = [(1, 2), (2, 2), (2, 8), (2, 10)]
-    writer = SummaryWriter(os.path.join("./out", args.dir))
+    writer = SummaryWriter(os.path.join("./logs", args.dir))
 
     for n, (a_local, a_global) in zip(ns, a):
         if not os.path.exists(f"./images/{args.dir}/{n}"):
