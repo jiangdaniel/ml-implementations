@@ -9,7 +9,7 @@ import torch as th
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.distributions import normal
+from torch.distributions import normal, categorical
 
 
 EPSILON = 10e-7
@@ -71,6 +71,7 @@ class SparseLayer(nn.Module):
         D, sigma, values = self.hyper()
 
         with th.no_grad():
+            '''
             D_prime = th.zeros(self.n_gauss * (4 + self.n_local + self.n_global), 2, device=D.device)
 
             select_nearest = th.tensor([[0., 0.], [0., 1.], [1., 0.], [1., 1.]], device=D.device).repeat(self.n_gauss, 1)
@@ -82,6 +83,16 @@ class SparseLayer(nn.Module):
             D_prime.round_()
             D_prime[:, 0].clamp_(0, self.shape[0]-1)
             D_prime[:, 1].clamp_(0, self.shape[1]-1)
+            '''
+            all_locs = th.arange(self.shape[0] * self.shape[1])
+            all_locs = th.stack(((all_locs / self.shape[1]).floor(), all_locs % self.shape[1]), dim=1).unsqueeze(-1).repeat(1, 1, self.n_gauss)
+            all_locs -= D.t().unsqueeze(0)
+            stds = sigma.sqrt().t().unsqueeze(0)
+            all_locs /= stds
+            pdfs = (self.standard.log_prob(all_locs) - stds.log()).sum(1).exp().sum(1)  # mathematically dubious
+            dist = categorical.Categorical(pdfs)
+            D_prime = dist.sample(th.Size((self.n_gauss * (4 + self.n_local + self.n_global),))).float()
+            D_prime = th.stack(((D_prime / self.shape[1]).floor(), D_prime % self.shape[1]), dim=1)
 
         means = D.t().unsqueeze(0).repeat(self.n_gauss * (4 + self.n_local + self.n_global), 1, 1)
         stds = sigma.sqrt().t().unsqueeze(0).repeat(self.n_gauss * (4 + self.n_local + self.n_global), 1, 1)
