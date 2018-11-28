@@ -90,4 +90,5 @@ if __name__ == "__main__":
     parser.add_argument("--no-cuda", action="store_true", default=False)
     args = parser.parse_args()
     device = th.device("cpu" if (not th.cuda.is_available() or args.no_cuda) else "cuda")
+    device = th.device("cpu")  # disables gpu support
     identity(args)
