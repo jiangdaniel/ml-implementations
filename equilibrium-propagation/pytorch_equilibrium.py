@@ -36,9 +36,7 @@ def main(args):
             th.rand(args.batch_size, 10, device=device)) for _ in range(len(trainloader))]
 
     for epoch in range(args.epochs):
-        running_loss = 0.
-        running_energy = 0.
-        running_true_positive = 0.
+        running_loss = running_energy = running_true_positive = 0.
 
         for i, (x, labels) in enumerate(tqdm(trainloader)):
             x, labels = x.view(-1, 784).to(device), labels.to(device)
