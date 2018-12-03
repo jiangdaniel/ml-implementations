@@ -20,10 +20,11 @@ def main(args):
     writer = SummaryWriter(os.path.join("logs", args.dir))
     trainloader, testloader = get_loaders(args.batch_size)
 
-    net = Net(n_layers=1)
+    net = Net(n_layers=args.layers)
     states = []
     for x, labels in trainloader:
-        states.append([th.rand(args.batch_size, 500, device=device), th.rand(args.batch_size, 10, device=device)])
+        states.append([th.rand(args.batch_size, 500, device=device) for _ in range(args.layers)]
+                + [th.rand(args.batch_size, 10, device=device)])
 
     for epoch in range(args.epochs):
         running_loss = running_energy = running_true_positive = 0.
@@ -74,6 +75,7 @@ def get_loaders(batch_size, fashion=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--layers", type=int, default=1)
     parser.add_argument("--epochs", type=int, default=25)
     parser.add_argument("--batch-size", type=int, default=20)
 
