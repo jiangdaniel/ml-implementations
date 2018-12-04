@@ -34,6 +34,8 @@ def main(args):
 
     states = [(th.rand(args.batch_size, 500, device=device), \
             th.rand(args.batch_size, 10, device=device)) for _ in range(len(trainloader))]
+    states_test = [(th.rand(args.batch_size, 500, device=device), \
+            th.rand(args.batch_size, 10, device=device)) for _ in range(len(testloader))]
 
     for epoch in range(args.epochs):
         running_loss = running_energy = running_true_positive = 0.
@@ -97,6 +99,27 @@ def main(args):
         writer.add_scalar(f"energy", energy_train, epoch)
         writer.add_scalar(f"accuracy", accuracy_train, epoch)
 
+        running_true_positive = 0.
+        for i, (x, labels) in enumerate(tqdm(testloader)):
+            x, labels = x.view(-1, 784).to(device), labels.to(device)
+            h, y = states_test[i]
+
+            # Free phase
+            for j in range(20):
+                dh = d_rho(h) * (x @ W1 + y @ W2.t() + b1) - h
+                dy = d_rho(y) * (h @ W2 + b2) - y
+
+                h = rho(h + epsilon * dh)
+                y = rho(y + epsilon * dy)
+
+            h_free, y_free = h, y
+            states_test[i] = h_free, y_free
+
+            running_true_positive += (y_free.argmax(1) == labels).sum().item()
+        accuracy_test = running_true_positive / (len(testloader) * args.batch_size)
+        writer.add_scalar(f"accuracy_test", accuracy_test, epoch)
+        print(f"Energy: {energy_train}, Accuracy: {accuracy_train}, Test Accuracy: {accuracy_test}, Loss: {loss_train}")
+
 def rho(x):
     return x.clamp(0., 1.)
 
@@ -136,4 +159,5 @@ if __name__ == "__main__":
     parser.add_argument("--no-cuda", action="store_true", default=False)
     args = parser.parse_args()
     device = th.device("cpu" if (not th.cuda.is_available() or args.no_cuda) else "cuda")
+    device = th.device("cpu")
     main(args)
