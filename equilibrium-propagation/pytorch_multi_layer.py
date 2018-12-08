@@ -25,6 +25,11 @@ def main(args):
     for x, labels in trainloader:
         states.append([th.rand(args.batch_size, 500, device=device) for _ in range(args.layers)]
                 + [th.rand(args.batch_size, 10, device=device)])
+    states_test = []
+    for x, labels in testloader:
+        states_test.append([th.rand(args.batch_size, 500, device=device) for _ in range(args.layers)]
+                + [th.rand(args.batch_size, 10, device=device)])
+
 
     for epoch in range(args.epochs):
         running_loss = running_energy = running_true_positive = 0.
@@ -51,6 +56,23 @@ def main(args):
         writer.add_scalar(f"loss", loss_train, epoch)
         writer.add_scalar(f"energy", energy_train, epoch)
         writer.add_scalar(f"accuracy", accuracy_train, epoch)
+
+        running_loss = running_energy = running_true_positive = 0.
+        for i, (x, labels) in enumerate(tqdm(testloader)):
+            x, labels = x.to(device).view(-1, 784), labels.to(device)
+            t = th.zeros(x.shape[0], 10, device=device)
+            t.scatter_(1, labels.unsqueeze(1), 1)
+
+            units = [x] + states_test[i]
+
+            units_free, _ = net.fixed_points(units, t)
+            states_test[i] = units_free[1:]
+
+            running_true_positive += (units_free[-1].argmax(1) == labels).sum().item()
+            running_loss += (t - units_free[-1]).pow(2).sum().item()
+        accuracy_test = running_true_positive / (len(testloader) * args.batch_size)
+        print(f"Energy: {energy_train}, Accuracy: {accuracy_train}, Test Accuracy: {accuracy_test}, Loss: {loss_train}")
+        writer.add_scalar(f"accuracy_test", accuracy_test, epoch)
 
 def get_loaders(batch_size, fashion=False):
     mnist = torchvision.datasets.MNIST

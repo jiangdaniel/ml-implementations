@@ -227,7 +227,7 @@ def main(args):
     alpha1 = 0.4
     alpha2 = 0.1
     alpha3 = 0.01
-    for epoch in range(args.epochs):
+    for epoch in range(args.epochs_final):
         running_loss = running_energy = running_true_positive = 0.
 
         for i, (x, labels) in enumerate(tqdm(trainloader)):
@@ -291,7 +291,7 @@ def main(args):
         energy_train = running_energy / (len(trainloader) * args.batch_size)
         accuracy_train = running_true_positive / (len(trainloader) * args.batch_size)
         loss_train = running_loss / (len(trainloader) * args.batch_size)
-        print(f"Energy: {energy_train}, Accuracy: {accuracy_train}, Loss: {loss_train}")
+        #print(f"Energy: {energy_train}, Accuracy: {accuracy_train}, Loss: {loss_train}")
         writer.add_scalar(f"loss", loss_train, epoch + args.epochs*2)
         writer.add_scalar(f"energy", energy_train, epoch + args.epochs*2)
         writer.add_scalar(f"accuracy", accuracy_train, epoch + args.epochs*2)
@@ -348,7 +348,8 @@ def get_loaders(batch_size, fashion=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=25)
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--epochs-final", type=int, default=42)
     parser.add_argument("--batch-size", type=int, default=20)
 
     parser.add_argument("--fashion", action="store_true", default=False,
