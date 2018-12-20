@@ -25,8 +25,7 @@ def main(args):
     optimizer = optim.SGD(net.parameters(), lr=args.lr)
 
     for epoch in range(args.epochs):
-        running_loss = running_true_positive = 0.
-        inner_loss = inner_true_positive = 0.
+        running_loss = running_true_positive = running_count = 0.
         for i, (x, labels) in enumerate(tqdm(trainloader, desc=f"Epoch {epoch}")):
             x, labels = x.view(-1, 784).to(device), labels.to(device)
             pred, weights, biases = net.forward(x)
@@ -43,26 +42,21 @@ def main(args):
             loss.backward()
             optimizer.step()
 
+            running_count += pred.shape[0]
             running_true_positive += (pred.argmax(1) == labels).sum().item()
-            inner_true_positive += (pred.argmax(1) == labels).sum().item()
             running_loss += loss.item()
-            inner_loss += loss.item()
 
-            if i % args.log_iter == args.log_iter - 1:
-                accuracy_inner = inner_true_positive / (args.batch_size * args.log_iter)
-                loss_inner = inner_loss / (args.batch_size * args.log_iter)
-                print(f"Inner loss: {loss_inner}, Inner accuracy: {accuracy_inner}")
-                inner_true_positive = inner_loss = 0.
-        accuracy_train = running_true_positive / (args.batch_size * len(trainloader))
-        loss_train = running_loss / (args.batch_size * len(trainloader))
+        accuracy_train = running_true_positive / running_count
+        loss_train = running_loss / running_count
 
-        running_loss = running_true_postiive = 0.
+        running_loss = running_true_positive = running_count = 0.
         with th.no_grad():
             for x, labels in tqdm(testloader, desc=f"Test set"):
                 x, labels = x.view(-1, 784).to(device), labels.to(device)
                 pred, _, _ = net.forward(x)
+                running_count += pred.shape[0]
                 running_true_positive += (pred.argmax(1) == labels).sum().item()
-            accuracy_test = running_true_positive / (args.batch_size * len(testloader))
+            accuracy_test = running_true_positive / running_count
 
         writer.add_scalar("train/loss", loss_train, epoch)
         writer.add_scalar("train/accuracy", accuracy_train, epoch)

@@ -18,8 +18,14 @@ class BayesianNet(nn.Module):
         self.biases_mus = nn.ParameterList([nn.Parameter(th.randn(layer[1]) / 10.) for layer in layers])
         self.biases_rhos = nn.ParameterList([nn.Parameter(th.zeros(layer[1]) - 3.) for layer in layers])
 
-        self.z = normal.Normal(0, 1)
+        self.z = normal.Normal(0., 1.)
         self.prior_sigma = 1.
+
+    def to(self, device):
+        """Hack for pytorch 0.4"""
+        super(BayesianNet, self).to(device)
+        self.z = normal.Normal(th.tensor(0., device=device), th.tensor(1., device=device))
+        return self
 
     def forward(self, x):
         weights, biases = self._sample_weights()
@@ -32,19 +38,19 @@ class BayesianNet(nn.Module):
         weights = []
         biases = []
         for W_mu, W_rho, b_mu, b_rho in zip(self.weights_mus, self.weights_rhos, self.biases_mus, self.biases_rhos):
-            weights.append(W_mu + self.z.sample(W_mu.shape) * F.softplus(W_rho))
-            biases.append(b_mu + self.z.sample(b_mu.shape) * F.softplus(b_rho))
+            weights.append(W_mu + self.z.sample(W_mu.shape).to(W_rho.device) * F.softplus(W_rho))
+            biases.append(b_mu + self.z.sample(b_mu.shape).to(W_rho.device) * F.softplus(b_rho))
         return weights, biases
 
     def log_likelihood_prior(self, weights, biases):
-        total = th.tensor(0)
+        total = th.tensor(0., device=weights[0].device)
         for W, b in zip(weights, biases):
             total = total + self.z.log_prob(W / self.prior_sigma).sum()
             total = total + self.z.log_prob(b / self.prior_sigma).sum()
         return total
 
     def log_likelihood_posterior(self, weights, biases):
-        total = th.tensor(0)
+        total = th.tensor(0., device=weights[0].device)
         for W, W_mu, W_rho, b, b_mu, b_rho in zip(weights, self.weights_mus, self.weights_rhos, biases, self.biases_mus, self.biases_rhos):
             total = total + self.z.log_prob((W - W_mu) / F.softplus(W_rho)).sum() \
                     + self.z.log_prob((b - b_mu) / F.softplus(b_rho)).sum()
