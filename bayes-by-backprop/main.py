@@ -26,6 +26,7 @@ def main(args):
 
     for epoch in range(args.epochs):
         running_loss = running_true_positive = 0.
+        inner_loss = inner_true_positive = 0.
         for i, (x, labels) in enumerate(tqdm(trainloader, desc=f"Epoch {epoch}")):
             x, labels = x.view(-1, 784).to(device), labels.to(device)
             pred, weights, biases = net.forward(x)
@@ -43,13 +44,30 @@ def main(args):
             optimizer.step()
 
             running_true_positive += (pred.argmax(1) == labels).sum().item()
+            inner_true_positive += (pred.argmax(1) == labels).sum().item()
             running_loss += loss.item()
+            inner_loss += loss.item()
 
             if i % args.log_iter == args.log_iter - 1:
-                accuracy_train = running_true_positive / (args.batch_size * args.log_iter)
-                loss_train = running_loss / (args.batch_size * args.log_iter)
-                print(f"Train loss: {loss_train}, Train accuracy: {accuracy_train}")
-                running_true_positive = running_loss = 0.
+                accuracy_inner = inner_true_positive / (args.batch_size * args.log_iter)
+                loss_inner = inner_loss / (args.batch_size * args.log_iter)
+                print(f"Inner loss: {loss_inner}, Inner accuracy: {accuracy_inner}")
+                inner_true_positive = inner_loss = 0.
+        accuracy_train = running_true_positive / (args.batch_size * len(trainloader))
+        loss_train = running_loss / (args.batch_size * len(trainloader))
+
+        running_loss = running_true_postiive = 0.
+        with th.no_grad():
+            for x, labels in tqdm(testloader, desc=f"Test set"):
+                x, labels = x.view(-1, 784).to(device), labels.to(device)
+                pred, _, _ = net.forward(x)
+                running_true_positive += (pred.argmax(1) == labels).sum().item()
+            accuracy_test = running_true_positive / (args.batch_size * len(testloader))
+
+        writer.add_scalar("train/loss", loss_train, epoch)
+        writer.add_scalar("train/accuracy", accuracy_train, epoch)
+        writer.add_scalar("test/accuracy", accuracy_test, epoch)
+        print(f"Epoch {epoch}. Train loss: {loss_train}, Train accuracy: {accuracy_train}, Test accuracy: {accuracy_test}")
 
 
 def get_loaders(batch_size, fashion=False):
@@ -76,8 +94,8 @@ def get_loaders(batch_size, fashion=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--batch-size", type=int, default=20)
-    parser.add_argument("--lr", type=int, default=0.01)
+    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--lr", type=int, default=0.001)
     parser.add_argument("--log-iter", type=int, default=10)
 
     parser.add_argument("--fashion", action="store_true", default=False)
