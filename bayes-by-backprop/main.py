@@ -26,7 +26,7 @@ def main(args):
 
     for epoch in range(args.epochs):
         running_loss = running_true_positive = running_count = 0.
-        for i, (x, labels) in enumerate(tqdm(trainloader, desc=f"Epoch {epoch}")):
+        for i, (x, labels) in enumerate(tqdm(trainloader, desc=f"Epoch {epoch}. Train data.")):
             x, labels = x.view(-1, 784).to(device), labels.to(device)
             pred, weights, biases = net.forward(x)
             prior = net.log_likelihood_prior(weights, biases)
@@ -46,39 +46,41 @@ def main(args):
             running_true_positive += (pred.argmax(1) == labels).sum().item()
             running_loss += loss.item()
 
-        accuracy_train = running_true_positive / running_count
+        acc_train = running_true_positive / running_count
         loss_train = running_loss / running_count
 
         running_loss = running_true_positive = running_count = 0.
         with th.no_grad():
-            for x, labels in tqdm(testloader, desc=f"Test set"):
+            for x, labels in tqdm(testloader, desc=f"Epoch {epoch}. Test data."):
                 x, labels = x.view(-1, 784).to(device), labels.to(device)
                 pred, _, _ = net.forward(x)
                 running_count += pred.shape[0]
                 running_true_positive += (pred.argmax(1) == labels).sum().item()
-            accuracy_test = running_true_positive / running_count
+            acc_test = running_true_positive / running_count
 
         writer.add_scalar("train/loss", loss_train, epoch)
-        writer.add_scalar("train/accuracy", accuracy_train, epoch)
-        writer.add_scalar("test/accuracy", accuracy_test, epoch)
-        print(f"Epoch {epoch}. Train loss: {loss_train}, Train accuracy: {accuracy_train}, Test accuracy: {accuracy_test}")
+        writer.add_scalar("train/accuracy", acc_train, epoch)
+        writer.add_scalar("test/accuracy", acc_test, epoch)
+        print(f"Epoch {epoch}. Train loss: {loss_train}, Train accuracy: {acc_train}, Test accuracy: {acc_test}")
 
 
 def get_loaders(batch_size, fashion=False):
     mnist = torchvision.datasets.MNIST
+    root = "./data/mnist"
     if fashion:
-        mnist = torchvision.datasets.MNIST
+        mnist = torchvision.datasets.FashionMNIST
+        root = "./data/fashion-mnist"
 
     transform = torchvision.transforms.Compose(
         [torchvision.transforms.ToTensor(),])
     
     trainloader = th.utils.data.DataLoader(
-        mnist(root="./data", train=True, download=True, transform=transform),
+        mnist(root=root, train=True, download=True, transform=transform),
         batch_size=batch_size,
         shuffle=True,
         num_workers=2)
     testloader = th.utils.data.DataLoader(
-        mnist(root="./data", train=False, download=True, transform=transform),
+        mnist(root=root, train=False, download=True, transform=transform),
         batch_size=batch_size,
         shuffle=False,
         num_workers=2)
@@ -90,7 +92,6 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--lr", type=int, default=0.001)
-    parser.add_argument("--log-iter", type=int, default=10)
 
     parser.add_argument("--fashion", action="store_true", default=False)
     parser.add_argument("--dir", default=utils.timestamp())
