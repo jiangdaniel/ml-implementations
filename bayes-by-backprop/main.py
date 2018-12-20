@@ -29,15 +29,15 @@ def main(args):
         for i, (x, labels) in enumerate(tqdm(trainloader, desc=f"Epoch {epoch}. Train data.")):
             x, labels = x.view(-1, 784).to(device), labels.to(device)
             pred, weights, biases = net.forward(x)
-            prior = net.log_likelihood_prior(weights, biases)
-            posterior = net.log_likelihood_posterior(weights, biases)
+            log_likelihood_prior = net.log_likelihood_prior(weights, biases)
+            log_likelihood_posterior = net.log_likelihood_posterior(weights, biases)
 
             t = th.zeros(x.shape[0], 10, device=device)
             t.scatter_(1, labels.unsqueeze(1), 1)
 
             log_likelihood_data = (t * pred).sum()
 
-            loss = (posterior - prior) / len(trainloader) - log_likelihood_data
+            loss = (log_likelihood_posterior - log_likelihood_prior) / len(trainloader) - log_likelihood_data
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
